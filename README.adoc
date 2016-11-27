@@ -8,14 +8,15 @@ It follows Bitcoin's coin Supply Model, with:
 
 * 21M BEC coins total
 * 0.00000001 BEC = 1 BECsatoshi
+* Halving each new era
 * 7th era (99.2% coins) ends at about 2034 (for BTC it's 2036)
 * 13th era (99.99% coins) ends at 2048 (for BTC it's 2060)
 
+Specific details:
 
-The difference that is starts with 2 BEC reward per ETC block instead of 50, just because Ethereum block time is
-much smaller compared to Bitcoin (14 seconds vs. 600 seconds)
-
-Mining starts at block 2,726,892 and Era size is 5250000 Ethereum blocks.
+* mining starts at block 2,726,892
+* Era size is 5250000 Ethereum blocks
+* starts with 2 BEC reward per ETC block (instead of 50, because Ethereum block time is much smaller)
 
 To claim block reward there should be a special transaction in the block, which calls contract method `claim()`. This
  transaction could be sent from any address, but only an actual miner for current block will receive reward tokens.
