@@ -1,0 +1,9 @@
+{
+  "name": "tests",
+  "dependencies": {
+    "bignumber.js": "^2.0.8",
+    "lodash": "^4.5.1"
+  },
+  "devDependencies": {
+  }
+}

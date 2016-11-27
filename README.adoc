@@ -1,0 +1,390 @@
+BEC - BitEtherCoin
+==================
+
+BEC (BitEtherCoin) is an Ethereum Classic coin, issued per each block as a reward to the miner.
+
+
+It follows Bitcoin's coin Supply Model, with:
+
+* 21M BEC coins total
+* 0.00000001 BEC = 1 BECsatoshi
+* 7th era (99.2% coins) ends at about 2034 (for BTC it's 2036)
+* 13th era (99.99% coins) ends at 2048 (for BTC it's 2060)
+
+
+The difference that is starts with 2 BEC reward per ETC block instead of 50, just because Ethereum block time is
+much smaller compared to Bitcoin (14 seconds vs. 600 seconds)
+
+Mining starts at block 2,726,892 and Era size is 5250000 Ethereum blocks.
+
+To claim block reward there should be a special transaction in the block, which calls contract method `claim()`. This
+ transaction could be sent from any address, but only an actual miner for current block will receive reward tokens.
+
+## Address
+
+Mainnet (ETC): 0x085fb4f24031eaedbc2b611aa528f22343eb52db
+
+You can install this address as a standard Ethereum token into your Mist or other wallet (see ABI below).
+
+
+## Mining BEC Coins
+
+To claim block reward there should be a special transaction in the block, which calls contract method `claim()`. This
+ transaction could be sent from any address, but only an actual miner for current block will receive reward tokens.
+
+For example you can send such transaction _before_ each block by execution following command:
+
+----
+curl --request POST \
+  --url http://localhost:8545/ \
+  --header 'content-type: application/json' \
+  --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from":"0xANY_UNLOCKED_ADDRESS", "to":"0x085fb4f24031eaedbc2b611aa528f22343eb52db", "gas": "0x30d40", "value": "0x0", "data": "0x4e71d92d"}], "id":1}'
+----
+
+Another way is to patch Parity/Geth to include such transaction automatically (TODO example)
+
+
+## ABI
+
+----
+[
+  {
+    "constant": false,
+    "inputs": [],
+    "name": "getEra",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "name",
+    "outputs": [
+      {
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_spender",
+        "type": "address"
+      },
+      {
+        "name": "_value",
+        "type": "uint256"
+      }
+    ],
+    "name": "approve",
+    "outputs": [
+      {
+        "name": "success",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "totalSupply",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_from",
+        "type": "address"
+      },
+      {
+        "name": "_to",
+        "type": "address"
+      },
+      {
+        "name": "_value",
+        "type": "uint256"
+      }
+    ],
+    "name": "transferFrom",
+    "outputs": [
+      {
+        "name": "success",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_eraBlock",
+        "type": "uint256"
+      },
+      {
+        "name": "_blockMined",
+        "type": "uint256"
+      },
+      {
+        "name": "_blockNumber",
+        "type": "uint256"
+      },
+      {
+        "name": "_rewardPrev",
+        "type": "uint256"
+      },
+      {
+        "name": "_reward",
+        "type": "uint256"
+      }
+    ],
+    "name": "getUnclaimed",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_block",
+        "type": "uint256"
+      }
+    ],
+    "name": "getEraForBlock",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [],
+    "name": "claim",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "_owner",
+        "type": "address"
+      }
+    ],
+    "name": "balanceOf",
+    "outputs": [
+      {
+        "name": "balance",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "symbol",
+    "outputs": [
+      {
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_to",
+        "type": "address"
+      },
+      {
+        "name": "_value",
+        "type": "uint256"
+      }
+    ],
+    "name": "transfer",
+    "outputs": [
+      {
+        "name": "success",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "_owner",
+        "type": "address"
+      },
+      {
+        "name": "_spender",
+        "type": "address"
+      }
+    ],
+    "name": "allowance",
+    "outputs": [
+      {
+        "name": "remaining",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "type": "constructor"
+  },
+  {
+    "payable": false,
+    "type": "fallback"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "_from",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "name": "_to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "_value",
+        "type": "uint256"
+      }
+    ],
+    "name": "Transfer",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "_owner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "name": "_spender",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "_value",
+        "type": "uint256"
+      }
+    ],
+    "name": "Approval",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "_miner",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "_value",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "_current",
+        "type": "bool"
+      }
+    ],
+    "name": "Reward",
+    "type": "event"
+  }
+]
+----
