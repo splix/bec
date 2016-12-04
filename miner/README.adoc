@@ -1,0 +1,54 @@
+Mining tools for BEC
+====================
+
+## Patch for Parity
+
+This patch will prepare your Parity instance to automatically add BEC Claim() transaction into a block mined by your
+node.
+
+Features:
+
+* add BEC claim transaction into mined blocks (before mining)
+* doesn't send such transaction to the network without including it into mined block
+* you receive all ETC spent on gas back (because you're miner of that block)
+
+Note:
+
+* you have to unlock that account for mining node, and put small amount of Ether inot that wallet
+* it can be any wallet address, and it's recommended to use a separate addresses for mining coinbase and BEC claim
+
+### Prepare Environment
+
+**Note**: you have to compiler Rust using same OS that you'll use for mining. If it's going to be a Linux then compile binaries on
+linux machine too.
+
+Install Rust compiler from https://www.rustup.rs/:
+----
+curl https://sh.rustup.rs -sSf | sh
+----
+
+Get Parity sources:
+----
+git clone git@github.com:ethcore/parity.git
+cd parity
+git checkout v1.4.5
+----
+
+### Apply patch
+
+Copy `parity-1.4.5.path` in that dir, edit patch to set an address to send claim transactions (line 20). Then apply it.
+
+----
+curl https://raw.githubusercontent.com/splix/bec/master/miner/parity-1.4.5.patch -O parity-1.4.5.patch
+vim parity-1.4.5.patch <- set an address for transactions, instead of 0x0000..00
+patch -p1 <parity-1.4.5.patch
+----
+
+### Compile Parity
+
+----
+cargo build --release
+----
+
+Wait 10-15 minutes to get Parity compiled, and finally you'll have a Parity with BEC mining built in, get it
+at `./target/release/parity`

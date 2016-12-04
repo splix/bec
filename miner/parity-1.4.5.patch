@@ -1,0 +1,44 @@
+--- a/ethcore/src/miner/miner.rs
++++ b/ethcore/src/miner/miner.rs
+@@ -27,7 +27,7 @@
+ use executive::contract_address;
+ use block::{ClosedBlock, SealedBlock, IsBlock, Block};
+ use error::*;
+-use transaction::{Action, SignedTransaction};
++use transaction::{Action, SignedTransaction, Transaction};
+ use receipt::{Receipt, RichReceipt};
+ use spec::Spec;
+ use engines::Engine;
+@@ -402,6 +402,32 @@
+ 			}
+ 		}
+
++		// --------------------------------------------------------------------------
++		// set an address here taht will be used to send claims
++		// this address must be unlocked on Parity start (--unlock ... option)
++		//
++		let claim_addr = Address::from("0x0000000000000000000000000000000000000000");
++		//
++		// --------------------------------------------------------------------------
++
++		let bec_tx = Transaction {
++			action: Action::Call(Address::from("0x085fb4f24031eaedbc2b611aa528f22343eb52db")),
++			value: U256::from(0),
++			data: "4e71d92d".from_hex().unwrap(),
++			gas: U256::from(200_000),
++			gas_price: U256::one(),
++			nonce: chain.latest_nonce(&claim_addr)
++		};
++		let accounts = match self.accounts {
++			Some(ref x) => Some(&**x),
++			None => None
++		};
++		let signature = accounts.unwrap().sign(claim_addr, None, bec_tx.hash(None)).unwrap();
++		match open_block.push_transaction(bec_tx.with_signature(signature, None), None) {
++			Err(e) => { warn!(target: "miner", "Error adding BitEther Coin transaction to block: Error: {:?}", e); },
++			_ => {}
++		};
++
+ 		let block = open_block.close();
+
+ 		let fetch_account = |a: &Address| AccountDetails {
