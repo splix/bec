@@ -39,7 +39,7 @@ git checkout v1.4.5
 Copy `parity-1.4.5.path` in that dir, edit patch to set an address to send claim transactions (line 20). Then apply it.
 
 ----
-curl https://raw.githubusercontent.com/splix/bec/master/miner/parity-1.4.5.patch -O parity-1.4.5.patch
+curl https://raw.githubusercontent.com/splix/bec/master/miner/parity-1.4.5.patch > parity-1.4.5.patch
 vim parity-1.4.5.patch <- set an address for transactions, instead of 0x0000..00
 patch -p1 <parity-1.4.5.patch
 ----
@@ -50,5 +50,5 @@ patch -p1 <parity-1.4.5.patch
 cargo build --release
 ----
 
-Wait 10-15 minutes to get Parity compiled, and finally you'll have a Parity with BEC mining built in, get it
+Wait 20-40 minutes to get Parity compiled, and finally you'll have a Parity with BEC mining built in, get it
 at `./target/release/parity`
