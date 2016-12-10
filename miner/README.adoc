@@ -52,3 +52,5 @@ cargo build --release
 
 Wait 20-40 minutes to get Parity compiled, and finally you'll have a Parity with BEC mining built in, get it
 at `./target/release/parity`
+
+NOTE: you need to pass additinal parameter to Parity `--force-sealing`
