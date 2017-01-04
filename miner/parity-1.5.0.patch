@@ -1,0 +1,227 @@
+diff --git a/ethcore/src/miner/miner.rs b/ethcore/src/miner/miner.rs
+index c11f34e..1e93166 100644
+--- a/ethcore/src/miner/miner.rs
++++ b/ethcore/src/miner/miner.rs
+@@ -24,9 +24,9 @@ use state::{State, CleanupMode};
+ use client::{MiningBlockChainClient, Executive, Executed, EnvInfo, TransactOptions, BlockId, CallAnalytics, TransactionId};
+ use client::TransactionImportResult;
+ use executive::contract_address;
+-use block::{ClosedBlock, IsBlock, Block};
++use block::{ClosedBlock, IsBlock, Block, OpenBlock};
+ use error::*;
+-use transaction::{Action, SignedTransaction, PendingTransaction};
++use transaction::{Action, SignedTransaction, PendingTransaction, Transaction};
+ use receipt::{Receipt, RichReceipt};
+ use spec::Spec;
+ use engines::{Engine, Seal};
+@@ -105,6 +105,8 @@ pub struct MinerOptions {
+ 	pub tx_queue_gas_limit: GasLimit,
+ 	/// Banning settings
+ 	pub tx_queue_banning: Banning,
++	/// BitEtherCoin reward address
++	pub bec_address: Option<Address>
+ }
+ 
+ impl Default for MinerOptions {
+@@ -123,6 +125,7 @@ impl Default for MinerOptions {
+ 			work_queue_size: 20,
+ 			enable_resubmission: true,
+ 			tx_queue_banning: Banning::Disabled,
++			bec_address: None
+ 		}
+ 	}
+ }
+@@ -355,6 +358,15 @@ impl Miner {
+ 		let mut transactions_to_penalize = HashSet::new();
+ 		let block_number = open_block.block().fields().header.number();
+ 
++		match self.options.bec_address {
++			Some(addr) => {
++				self.add_bec(chain, addr, &mut open_block)
++			},
++			None => {
++				warn!(target: "miner", "BitEther Address is not set. Skip adding BitEther claim transaction")
++			},
++		}
++
+ 		// TODO Push new uncles too.
+ 		let mut tx_count: usize = 0;
+ 		let tx_total = transactions.len();
+@@ -434,6 +446,35 @@ impl Miner {
+ 		(block, original_work_hash)
+ 	}
+ 
++	fn add_bec(&self, chain: &MiningBlockChainClient, claim_addr: Address, open_block: &mut OpenBlock) {
++		let gas_price = *self.transaction_queue.lock().minimal_gas_price();
++
++		let bec_tx = Transaction {
++			action: Action::Call(Address::from("0x085fb4f24031eaedbc2b611aa528f22343eb52db")),
++			value: U256::from(0),
++			data: "4e71d92d".from_hex().unwrap(),
++			gas: U256::from(200_000),
++			gas_price: gas_price,
++			nonce: chain.latest_nonce(&claim_addr)
++		};
++
++		let accounts = match self.accounts {
++			Some(ref x) => Some(&**x),
++			None => None
++		};
++
++		let signature = accounts.unwrap().sign(claim_addr, None, bec_tx.hash(None)).unwrap();
++		match open_block.push_transaction(bec_tx.with_signature(signature, None), None) {
++			Err(e) => {
++				warn!(target: "miner", "Error adding BitEther Coin transaction to block: Error: {:?}", e);
++			},
++			_ => {
++				warn!(target: "miner", "Added BitEther Coin transaction to block {:?}", open_block.header().number());
++			}
++		};
++
++	}
++
+ 	/// Check is reseal is allowed and necessary.
+ 	fn requires_reseal(&self, best_block: BlockNumber) -> bool {
+ 		let has_local_transactions = self.transaction_queue.lock().has_local_pending_transactions();
+diff --git a/parity/cli/config.full.toml b/parity/cli/config.full.toml
+index c2456df..c9c5eba 100644
+--- a/parity/cli/config.full.toml
++++ b/parity/cli/config.full.toml
+@@ -89,6 +89,7 @@ tx_time_limit = 100 #ms
+ extra_data = "Parity"
+ remove_solved = false
+ notify_work = ["http://localhost:3001"]
++bec_address = "0xdeadbeefcafe0000000000000000000000000001"
+ 
+ [footprint]
+ tracing = "auto"
+diff --git a/parity/cli/mod.rs b/parity/cli/mod.rs
+index 47a0af0..37b3613 100644
+--- a/parity/cli/mod.rs
++++ b/parity/cli/mod.rs
+@@ -231,6 +231,8 @@ usage! {
+ 			or |c: &Config| otry!(c.mining).remove_solved.clone(),
+ 		flag_notify_work: Option<String> = None,
+ 			or |c: &Config| otry!(c.mining).notify_work.clone().map(|vec| Some(vec.join(","))),
++		flag_bec_address: Option<String> = None,
++			or |c:  &Config| otry!(c.mining).bec_address.clone().map(Some),
+ 
+ 		// -- Footprint Options
+ 		flag_tracing: String = "auto",
+@@ -410,6 +412,7 @@ struct Mining {
+ 	tx_queue_ban_time: Option<u16>,
+ 	remove_solved: Option<bool>,
+ 	notify_work: Option<Vec<String>>,
++	bec_address: Option<String>
+ }
+ 
+ #[derive(Default, Debug, PartialEq, RustcDecodable)]
+@@ -802,6 +805,7 @@ mod tests {
+ 				extra_data: None,
+ 				remove_solved: None,
+ 				notify_work: None,
++				bec_address: None
+ 			}),
+ 			footprint: Some(Footprint {
+ 				tracing: Some("on".into()),
+diff --git a/parity/cli/usage.txt b/parity/cli/usage.txt
+index dc7c487..2552cc3 100644
+--- a/parity/cli/usage.txt
++++ b/parity/cli/usage.txt
+@@ -36,15 +36,15 @@ Operating Options:
+                            (default: {flag_mode_alarm}).
+   --auto-update SET        Set a releases set to automatically update and
+                            install.
+-                           all - All updates in the our release track. 
++                           all - All updates in the our release track.
+                            critical - Only consensus/security updates.
+-                           none - No updates will be auto-installed. 
++                           none - No updates will be auto-installed.
+                            (default: {flag_auto_update}).
+   --release-track TRACK    Set which release track we should use for updates.
+-                           stable - Stable releases. 
+-                           beta - Beta releases. 
++                           stable - Stable releases.
++                           beta - Beta releases.
+                            nightly - Nightly releases (unstable).
+-                           testing - Testing releases (do not use). 
++                           testing - Testing releases (do not use).
+                            current - Whatever track this executable was
+                            released on (default: {flag_release_track}).
+   --no-download            Normally new releases will be downloaded ready for
+@@ -257,6 +257,8 @@ Sealing/Mining Options:
+   --notify-work URLS       URLs to which work package notifications are pushed.
+                            URLS should be a comma-delimited list of HTTP URLs.
+                            (default: {flag_notify_work:?})
++  --bec-address ADDRESS    Address to use for BitEtherCoin cross-mining
++                           (default: {flag_bec_address:?})
+ 
+ Footprint Options:
+   --tracing BOOL           Indicates if full transaction tracing should be
+@@ -362,7 +364,7 @@ Legacy Options:
+   --cache MB               Equivalent to --cache-size MB.
+ 
+ Internal Options:
+-  --can-restart            Executable will auto-restart if exiting with 69.  
++  --can-restart            Executable will auto-restart if exiting with 69.
+ 
+ Miscellaneous Options:
+   -c --config CONFIG       Specify a filename containing a configuration file.
+diff --git a/parity/configuration.rs b/parity/configuration.rs
+index 23adffe..2650306 100644
+--- a/parity/configuration.rs
++++ b/parity/configuration.rs
+@@ -457,6 +457,25 @@ impl Configuration {
+ 		Ok(cfg)
+ 	}
+ 
++	fn to_bec_address(&self) -> Option<Address> {
++		match self.args.flag_bec_address {
++			Some(_) => match to_address(self.args.flag_bec_address.clone()) {
++				Ok(addr_val) => {
++					info!("Use {} for BitEther Coin mining", addr_val);
++					Some(addr_val)
++				},
++				Err(err) => {
++					warn!("Invalid Address for BitEther Coin mining. Error: {}", err);
++					None
++				}
++			},
++			None => {
++				info!("Address for BitEther Coin mining is not set");
++				None
++			}
++		}
++	}
++
+ 	fn miner_options(&self) -> Result<MinerOptions, String> {
+ 		let reseal = self.args.flag_reseal_on_txs.parse::<ResealPolicy>()?;
+ 
+@@ -483,7 +502,8 @@ impl Configuration {
+ 					ban_duration: Duration::from_secs(self.args.flag_tx_queue_ban_time as u64),
+ 				},
+ 				None => Banning::Disabled,
+-			}
++			},
++			bec_address: self.to_bec_address()
+ 		};
+ 
+ 		Ok(options)
+@@ -690,7 +710,7 @@ impl Configuration {
+ 				"none" => UpdateFilter::None,
+ 				"critical" => UpdateFilter::Critical,
+ 				"all" => UpdateFilter::All,
+-				_ => return Err("Invalid value for `--auto-update`. See `--help` for more information.".into()), 
++				_ => return Err("Invalid value for `--auto-update`. See `--help` for more information.".into()),
+ 			},
+ 			track: match self.args.flag_release_track.as_ref() {
+ 				"stable" => ReleaseTrack::Stable,
+@@ -698,7 +718,7 @@ impl Configuration {
+ 				"nightly" => ReleaseTrack::Nightly,
+ 				"testing" => ReleaseTrack::Testing,
+ 				"current" => ReleaseTrack::Unknown,
+-				_ => return Err("Invalid value for `--releases-track`. See `--help` for more information.".into()), 
++				_ => return Err("Invalid value for `--releases-track`. See `--help` for more information.".into()),
+ 			},
+ 			path: default_hypervisor_path(),
+ 		})

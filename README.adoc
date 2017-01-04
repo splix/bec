@@ -42,6 +42,7 @@ curl --request POST \
   --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from":"0xANY_UNLOCKED_ADDRESS", "to":"0x085fb4f24031eaedbc2b611aa528f22343eb52db", "gas": "0x30d40", "value": "0x0", "data": "0x4e71d92d"}], "id":1}'
 ----
 
+The problem with this approach that it will cost you some gas to execute this transaction even if you're a miner of the block.
 Another way is to patch Parity/Geth to include such transactions automatically, link:miner/[See Example]
 
 

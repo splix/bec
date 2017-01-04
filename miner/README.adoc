@@ -31,17 +31,17 @@ Get Parity sources:
 ----
 git clone git@github.com:ethcore/parity.git
 cd parity
-git checkout v1.4.5
+git checkout master
 ----
 
 ### Apply patch
 
-Copy `parity-1.4.5.path` in that dir, edit patch to set an address to send claim transactions (line 20). Then apply it.
+Copy `parity-1.5.0.path` in that dir and apply it to parity sources:
 
 ----
-curl https://raw.githubusercontent.com/splix/bec/master/miner/parity-1.4.5.patch > parity-1.4.5.patch
-vim parity-1.4.5.patch <- set an address for transactions, instead of 0x0000..00
-patch -p1 <parity-1.4.5.patch
+curl https://raw.githubusercontent.com/splix/bec/master/miner/parity-1.5.0.patch > parity-1.5.0.patch
+vim parity-1.5.0.patch
+git apply parity-1.5.0.patch
 ----
 
 ### Compile Parity
@@ -50,7 +50,13 @@ patch -p1 <parity-1.4.5.patch
 cargo build --release
 ----
 
-Wait 20-40 minutes to get Parity compiled, and finally you'll have a Parity with BEC mining built in, get it
+Wait 20-30 minutes to get Parity compiled, and finally you'll have a Parity with BEC mining built in, get it
 at `./target/release/parity`
 
-NOTE: you need to pass additinal parameter to Parity `--force-sealing`
+NOTE: you need to pass additional parameters to Parity to claim BitEtherCoin within every mined block
+
+You have to run Parity with following options:
+
+ * `--force-sealing` - always reseal a new block (you need to put a new tx in a block)
+ * `--bec-address ADDRESS` - source address for BitEtherCoin claim, must be unlocked
+ * `--unlock ADDRESS --password PASSWORD_FILE_FOR_ADDRESS` - unlock address
