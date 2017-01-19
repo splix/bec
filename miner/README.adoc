@@ -54,7 +54,6 @@ at `./target/release/parity`
 
 You have to run Parity with following options:
 
- * `--force-sealing` - always reseal a new block (you need to put a new tx in a block)
  * `--bec-address ADDRESS` - source address for BitEtherCoin claim, must be unlocked
  * `--unlock ADDRESS --password PASSWORD_FILE_FOR_ADDRESS` - unlock address
 
@@ -66,6 +65,5 @@ echo MYPASSWORD > ./password.txt
 ./target/release/parity \
     --author 01234567890abcdef0123456789abcdef0123456 \
     --unlock 01234567890abcdef0123456789abcdef0123456 --password password.txt \
-    --bec-address 01234567890abcdef0123456789abcdef0123456 \
-    --force-sealing
+    --bec-address 01234567890abcdef0123456789abcdef0123456
 ----

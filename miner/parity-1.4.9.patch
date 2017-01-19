@@ -1,5 +1,5 @@
 diff --git a/ethcore/src/miner/miner.rs b/ethcore/src/miner/miner.rs
-index 055de6f..05af720 100644
+index 055de6f..b1019e6 100644
 --- a/ethcore/src/miner/miner.rs
 +++ b/ethcore/src/miner/miner.rs
 @@ -25,9 +25,9 @@ use header::Header;
@@ -31,22 +31,30 @@ index 055de6f..05af720 100644
  		}
  	}
  }
-@@ -347,6 +350,14 @@ impl Miner {
- 		let mut transactions_to_penalize = HashSet::new();
- 		let block_number = open_block.block().fields().header.number();
- 
-+		match self.options.bec_address {
-+			Some(addr) => {
-+				self.add_bec(chain, addr, &mut open_block)
-+			},
-+			None => {
-+				warn!(target: "miner", "BitEther Address is not set. Skip adding BitEther claim transaction")
-+			},
-+		}
- 		// TODO Push new uncles too.
- 		for tx in transactions {
- 			let hash = tx.hash();
-@@ -421,6 +432,35 @@ impl Miner {
+@@ -333,11 +336,20 @@ impl Miner {
+ 				None => {
+ 					// block not found - create it.
+ 					trace!(target: "miner", "prepare_block: No existing work - making new block");
+-					chain.prepare_open_block(
++					let mut new_block = chain.prepare_open_block(
+ 						self.author(),
+ 						(self.gas_floor_target(), self.gas_ceil_target()),
+ 						self.extra_data()
+-					)
++					);
++					match self.options.bec_address {
++						Some(addr) => {
++							self.add_bec(chain, addr, &mut new_block)
++						},
++						None => {
++							warn!(target: "miner", "BitEther Address is not set. Skip adding BitEther claim transaction")
++						},
++					}
++					new_block
+ 				}
+ 			};
+ 			(transactions, open_block, last_work_hash)
+@@ -421,6 +433,35 @@ impl Miner {
  		(block, original_work_hash)
  	}
  
