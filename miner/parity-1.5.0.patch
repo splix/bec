@@ -1,5 +1,5 @@
 diff --git a/ethcore/src/miner/miner.rs b/ethcore/src/miner/miner.rs
-index c11f34e..1e93166 100644
+index 3ffb790..3881ed0 100644
 --- a/ethcore/src/miner/miner.rs
 +++ b/ethcore/src/miner/miner.rs
 @@ -24,9 +24,9 @@ use state::{State, CleanupMode};
@@ -31,26 +31,34 @@ index c11f34e..1e93166 100644
  		}
  	}
  }
-@@ -355,6 +358,15 @@ impl Miner {
- 		let mut transactions_to_penalize = HashSet::new();
- 		let block_number = open_block.block().fields().header.number();
- 
-+		match self.options.bec_address {
-+			Some(addr) => {
-+				self.add_bec(chain, addr, &mut open_block)
-+			},
-+			None => {
-+				warn!(target: "miner", "BitEther Address is not set. Skip adding BitEther claim transaction")
-+			},
-+		}
-+
- 		// TODO Push new uncles too.
- 		let mut tx_count: usize = 0;
- 		let tx_total = transactions.len();
-@@ -434,6 +446,35 @@ impl Miner {
+@@ -341,11 +344,20 @@ impl Miner {
+ 				None => {
+ 					// block not found - create it.
+ 					trace!(target: "miner", "prepare_block: No existing work - making new block");
+-					chain.prepare_open_block(
++					let mut new_block = chain.prepare_open_block(
+ 						self.author(),
+ 						(self.gas_floor_target(), self.gas_ceil_target()),
+ 						self.extra_data()
+-					)
++					);
++					match self.options.bec_address {
++						Some(addr) => {
++							self.add_bec(chain, addr, &mut new_block)
++						},
++						None => {
++							warn!(target: "miner", "BitEther Address is not set. Skip adding BitEther claim transaction")
++						},
++					}
++					new_block
+ 				}
+ 			};
+ 			(transactions, open_block, last_work_hash)
+@@ -431,6 +443,36 @@ impl Miner {
  		(block, original_work_hash)
  	}
  
++
 +	fn add_bec(&self, chain: &MiningBlockChainClient, claim_addr: Address, open_block: &mut OpenBlock) {
 +		let gas_price = *self.transaction_queue.lock().minimal_gas_price();
 +
@@ -74,7 +82,7 @@ index c11f34e..1e93166 100644
 +				warn!(target: "miner", "Error adding BitEther Coin transaction to block: Error: {:?}", e);
 +			},
 +			_ => {
-+				warn!(target: "miner", "Added BitEther Coin transaction to block {:?}", open_block.header().number());
++				info!(target: "miner", "Added BitEther Coin transaction to block {:?}", open_block.header().number());
 +			}
 +		};
 +
@@ -84,10 +92,10 @@ index c11f34e..1e93166 100644
  	fn requires_reseal(&self, best_block: BlockNumber) -> bool {
  		let has_local_transactions = self.transaction_queue.lock().has_local_pending_transactions();
 diff --git a/parity/cli/config.full.toml b/parity/cli/config.full.toml
-index c2456df..c9c5eba 100644
+index 088066e..e596778 100644
 --- a/parity/cli/config.full.toml
 +++ b/parity/cli/config.full.toml
-@@ -89,6 +89,7 @@ tx_time_limit = 100 #ms
+@@ -90,6 +90,7 @@ tx_time_limit = 100 #ms
  extra_data = "Parity"
  remove_solved = false
  notify_work = ["http://localhost:3001"]
@@ -96,10 +104,10 @@ index c2456df..c9c5eba 100644
  [footprint]
  tracing = "auto"
 diff --git a/parity/cli/mod.rs b/parity/cli/mod.rs
-index 47a0af0..37b3613 100644
+index 7e5e4d1..d5ba2c3 100644
 --- a/parity/cli/mod.rs
 +++ b/parity/cli/mod.rs
-@@ -231,6 +231,8 @@ usage! {
+@@ -232,6 +232,8 @@ usage! {
  			or |c: &Config| otry!(c.mining).remove_solved.clone(),
  		flag_notify_work: Option<String> = None,
  			or |c: &Config| otry!(c.mining).notify_work.clone().map(|vec| Some(vec.join(","))),
@@ -108,7 +116,7 @@ index 47a0af0..37b3613 100644
  
  		// -- Footprint Options
  		flag_tracing: String = "auto",
-@@ -410,6 +412,7 @@ struct Mining {
+@@ -411,6 +413,7 @@ struct Mining {
  	tx_queue_ban_time: Option<u16>,
  	remove_solved: Option<bool>,
  	notify_work: Option<Vec<String>>,
@@ -116,40 +124,19 @@ index 47a0af0..37b3613 100644
  }
  
  #[derive(Default, Debug, PartialEq, RustcDecodable)]
-@@ -802,6 +805,7 @@ mod tests {
+@@ -804,6 +807,7 @@ mod tests {
  				extra_data: None,
  				remove_solved: None,
  				notify_work: None,
-+				bec_address: None
++                bec_address: None
  			}),
  			footprint: Some(Footprint {
  				tracing: Some("on".into()),
 diff --git a/parity/cli/usage.txt b/parity/cli/usage.txt
-index dc7c487..2552cc3 100644
+index f75dda5..a8663a5 100644
 --- a/parity/cli/usage.txt
 +++ b/parity/cli/usage.txt
-@@ -36,15 +36,15 @@ Operating Options:
-                            (default: {flag_mode_alarm}).
-   --auto-update SET        Set a releases set to automatically update and
-                            install.
--                           all - All updates in the our release track. 
-+                           all - All updates in the our release track.
-                            critical - Only consensus/security updates.
--                           none - No updates will be auto-installed. 
-+                           none - No updates will be auto-installed.
-                            (default: {flag_auto_update}).
-   --release-track TRACK    Set which release track we should use for updates.
--                           stable - Stable releases. 
--                           beta - Beta releases. 
-+                           stable - Stable releases.
-+                           beta - Beta releases.
-                            nightly - Nightly releases (unstable).
--                           testing - Testing releases (do not use). 
-+                           testing - Testing releases (do not use).
-                            current - Whatever track this executable was
-                            released on (default: {flag_release_track}).
-   --no-download            Normally new releases will be downloaded ready for
-@@ -257,6 +257,8 @@ Sealing/Mining Options:
+@@ -258,6 +258,8 @@ Sealing/Mining Options:
    --notify-work URLS       URLs to which work package notifications are pushed.
                             URLS should be a comma-delimited list of HTTP URLs.
                             (default: {flag_notify_work:?})
@@ -158,20 +145,11 @@ index dc7c487..2552cc3 100644
  
  Footprint Options:
    --tracing BOOL           Indicates if full transaction tracing should be
-@@ -362,7 +364,7 @@ Legacy Options:
-   --cache MB               Equivalent to --cache-size MB.
- 
- Internal Options:
--  --can-restart            Executable will auto-restart if exiting with 69.  
-+  --can-restart            Executable will auto-restart if exiting with 69.
- 
- Miscellaneous Options:
-   -c --config CONFIG       Specify a filename containing a configuration file.
 diff --git a/parity/configuration.rs b/parity/configuration.rs
-index 23adffe..2650306 100644
+index 671c782..a87f1d9 100644
 --- a/parity/configuration.rs
 +++ b/parity/configuration.rs
-@@ -457,6 +457,25 @@ impl Configuration {
+@@ -458,6 +458,25 @@ impl Configuration {
  		Ok(cfg)
  	}
  
@@ -197,7 +175,7 @@ index 23adffe..2650306 100644
  	fn miner_options(&self) -> Result<MinerOptions, String> {
  		let reseal = self.args.flag_reseal_on_txs.parse::<ResealPolicy>()?;
  
-@@ -483,7 +502,8 @@ impl Configuration {
+@@ -484,7 +503,8 @@ impl Configuration {
  					ban_duration: Duration::from_secs(self.args.flag_tx_queue_ban_time as u64),
  				},
  				None => Banning::Disabled,
@@ -207,21 +185,3 @@ index 23adffe..2650306 100644
  		};
  
  		Ok(options)
-@@ -690,7 +710,7 @@ impl Configuration {
- 				"none" => UpdateFilter::None,
- 				"critical" => UpdateFilter::Critical,
- 				"all" => UpdateFilter::All,
--				_ => return Err("Invalid value for `--auto-update`. See `--help` for more information.".into()), 
-+				_ => return Err("Invalid value for `--auto-update`. See `--help` for more information.".into()),
- 			},
- 			track: match self.args.flag_release_track.as_ref() {
- 				"stable" => ReleaseTrack::Stable,
-@@ -698,7 +718,7 @@ impl Configuration {
- 				"nightly" => ReleaseTrack::Nightly,
- 				"testing" => ReleaseTrack::Testing,
- 				"current" => ReleaseTrack::Unknown,
--				_ => return Err("Invalid value for `--releases-track`. See `--help` for more information.".into()), 
-+				_ => return Err("Invalid value for `--releases-track`. See `--help` for more information.".into()),
- 			},
- 			path: default_hypervisor_path(),
- 		})
