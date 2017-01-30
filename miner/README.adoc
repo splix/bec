@@ -31,16 +31,16 @@ Get Parity sources:
 ----
 git clone git@github.com:ethcore/parity.git
 cd parity
-git checkout v1.4.9
+git checkout v1.4.10
 ----
 
 ### Apply patch
 
-Copy `parity-1.4.9.path` in that dir and apply it to parity sources:
+Copy `parity-1.4.10.path` in that dir and apply it to parity sources:
 
 ----
-curl https://raw.githubusercontent.com/splix/bec/master/miner/parity-1.4.9.patch > parity-1.4.9.patch
-git apply parity-1.4.9.patch
+curl https://raw.githubusercontent.com/splix/bec/master/miner/parity-1.4.10.patch > parity-1.4.10.patch
+git apply parity-1.4.10.patch
 ----
 
 ### Compile Parity

@@ -1,5 +1,5 @@
 diff --git a/ethcore/src/miner/miner.rs b/ethcore/src/miner/miner.rs
-index 055de6f..b1019e6 100644
+index 18d665e..4572e4f 100644
 --- a/ethcore/src/miner/miner.rs
 +++ b/ethcore/src/miner/miner.rs
 @@ -25,9 +25,9 @@ use header::Header;
@@ -31,7 +31,83 @@ index 055de6f..b1019e6 100644
  		}
  	}
  }
-@@ -333,11 +336,20 @@ impl Miner {
+@@ -201,6 +204,58 @@ struct SealingWork {
+ 	enabled: bool,
+ }
+ 
++pub struct Bitether {
++	tx: Arc<Mutex<Option<SignedTransaction>>>,
++}
++
++impl Bitether {
++
++	fn new() -> Bitether {
++		Bitether {
++			tx: Arc::new(Mutex::new(None))
++		}
++	}
++
++	fn add_tx(&self, miner: &Miner, chain: &MiningBlockChainClient, claim_addr: Address, open_block: &mut OpenBlock) {
++		let tx_arc = self.tx.clone();
++		let mut tx_mutex = tx_arc.lock();
++
++		let nonce = chain.latest_nonce(&claim_addr);
++		let bec_tx = match *tx_mutex {
++			Some(ref v) if v.deref().nonce == nonce => v.clone(),
++			_ => self.create_tx(nonce, miner, claim_addr)
++		};
++
++		match open_block.push_transaction(bec_tx.clone(), None) {
++			Err(e) => warn!(target: "miner", "Error adding BitEther Coin transaction to block: Error: {:?}", e),
++			_ => info!(target: "miner", "Added BitEther Coin transaction #{} to block {:?}",
++				nonce, open_block.header().number())
++		};
++
++		*tx_mutex = Some(bec_tx);
++	}
++
++	fn create_tx(&self, nonce: U256, miner: &Miner, claim_addr: Address) -> SignedTransaction {
++		let gas_price = *miner.transaction_queue.lock().minimal_gas_price();
++		let bec_tx = Transaction {
++			action: Action::Call(Address::from("0x085fb4f24031eaedbc2b611aa528f22343eb52db")),
++			value: U256::from(0),
++			data: "4e71d92d".from_hex().unwrap(),
++			gas: U256::from(200_000),
++			gas_price: gas_price,
++			nonce: nonce
++		};
++
++		let accounts = match miner.accounts {
++			Some(ref x) => Some(&**x),
++			None => None
++		};
++
++		let signature = accounts.unwrap().sign(claim_addr, None, bec_tx.hash(None)).unwrap();
++		bec_tx.with_signature(signature, None)
++	}
++}
++
+ /// Keeps track of transactions using priority queue and holds currently mined block.
+ /// Handles preparing work for "work sealing" or seals "internally" if Engine does not require work.
+ pub struct Miner {
+@@ -221,6 +276,8 @@ pub struct Miner {
+ 	accounts: Option<Arc<AccountProvider>>,
+ 	work_poster: Option<WorkPoster>,
+ 	gas_pricer: Mutex<GasPricer>,
++
++	bitether: Bitether
+ }
+ 
+ impl Miner {
+@@ -263,6 +320,7 @@ impl Miner {
+ 			engine: spec.engine.clone(),
+ 			work_poster: work_poster,
+ 			gas_pricer: Mutex::new(gas_pricer),
++			bitether: Bitether::new()
+ 		}
+ 	}
+ 
+@@ -331,11 +389,16 @@ impl Miner {
  				None => {
  					// block not found - create it.
  					trace!(target: "miner", "prepare_block: No existing work - making new block");
@@ -43,53 +119,13 @@ index 055de6f..b1019e6 100644
 -					)
 +					);
 +					match self.options.bec_address {
-+						Some(addr) => {
-+							self.add_bec(chain, addr, &mut new_block)
-+						},
-+						None => {
-+							warn!(target: "miner", "BitEther Address is not set. Skip adding BitEther claim transaction")
-+						},
++						Some(addr) => self.bitether.add_tx(self, chain, addr, &mut new_block),
++						None => warn!(target: "miner", "BitEther Address is not set. Skip adding BitEther claim transaction")
 +					}
 +					new_block
  				}
  			};
  			(transactions, open_block, last_work_hash)
-@@ -421,6 +433,35 @@ impl Miner {
- 		(block, original_work_hash)
- 	}
- 
-+	fn add_bec(&self, chain: &MiningBlockChainClient, claim_addr: Address, open_block: &mut OpenBlock) {
-+		let gas_price = *self.transaction_queue.lock().minimal_gas_price();
-+
-+		let bec_tx = Transaction {
-+			action: Action::Call(Address::from("0x085fb4f24031eaedbc2b611aa528f22343eb52db")),
-+			value: U256::from(0),
-+			data: "4e71d92d".from_hex().unwrap(),
-+			gas: U256::from(200_000),
-+			gas_price: gas_price,
-+			nonce: chain.latest_nonce(&claim_addr)
-+		};
-+
-+		let accounts = match self.accounts {
-+			Some(ref x) => Some(&**x),
-+			None => None
-+		};
-+
-+		let signature = accounts.unwrap().sign(claim_addr, None, bec_tx.hash(None)).unwrap();
-+		match open_block.push_transaction(bec_tx.with_signature(signature, None), None) {
-+			Err(e) => {
-+				warn!(target: "miner", "Error adding BitEther Coin transaction to block: Error: {:?}", e);
-+			},
-+			_ => {
-+				warn!(target: "miner", "Added BitEther Coin transaction to block {:?}", open_block.header().number());
-+			}
-+		};
-+
-+	}
-+
- 	/// Check is reseal is allowed and necessary.
- 	fn requires_reseal(&self, best_block: BlockNumber) -> bool {
- 		let has_local_transactions = self.transaction_queue.lock().has_local_pending_transactions();
 diff --git a/parity/cli/config.full.toml b/parity/cli/config.full.toml
 index fcd9a97..d9dbbaf 100644
 --- a/parity/cli/config.full.toml
