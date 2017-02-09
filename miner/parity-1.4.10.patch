@@ -1,20 +1,200 @@
+diff --git a/ethcore/src/miner/bitether.rs b/ethcore/src/miner/bitether.rs
+new file mode 100644
+index 0000000..13f4b8d
+--- /dev/null
++++ b/ethcore/src/miner/bitether.rs
+@@ -0,0 +1,178 @@
++use util::*;
++use account_provider::AccountProvider;
++use client::{MiningBlockChainClient};
++use block::{IsBlock, OpenBlock};
++use transaction::{Action, SignedTransaction, Transaction};
++use miner::banning_queue::{BanningTransactionQueue};
++use std::vec::Vec;
++use std::thread;
++
++#[derive(Clone)]
++pub struct BitEtherOptions {
++    tx: Arc<Mutex<Option<SignedTransaction>>>,
++    transaction_queue: Arc<Mutex<BanningTransactionQueue>>,
++    accounts: Arc<AccountProvider>,
++    address: Address
++}
++
++pub enum BitEtherError {
++    SignError
++}
++
++impl fmt::Display for BitEtherError {
++    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
++        match *self {
++            BitEtherError::SignError => write!(f, "Sign failed"),
++        }
++    }
++}
++
++impl fmt::Debug for BitEtherError {
++    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
++        match *self {
++            BitEtherError::SignError => write!(f, "Sign failed"),
++        }
++    }
++}
++
++struct CachedTransaction {
++    tx: SignedTransaction,
++    nonce: U256
++}
++
++pub struct BitEtherMiner {
++    options: Arc<Option<BitEtherOptions>>,
++    cache: Arc<Mutex<Vec<CachedTransaction>>>
++}
++
++
++impl BitEtherMiner {
++
++    pub fn new(tq: Arc<Mutex<BanningTransactionQueue>>, accounts_opt: &Option<Arc<AccountProvider>>, claim_addr_opt: Option<Address>) -> BitEtherMiner {
++        let accounts = match *accounts_opt {
++            Some(ref val) => val.clone(),
++            None => return BitEtherMiner {
++                options: Arc::new(None),
++                cache: Arc::new(Mutex::new(Vec::new()))
++            }
++        };
++        let claim_addr = match claim_addr_opt {
++            Some(val) => val,
++            None => return BitEtherMiner {
++                options: Arc::new(None),
++                cache: Arc::new(Mutex::new(Vec::new()))
++            }
++        };
++        BitEtherMiner {
++            options: Arc::new(Some(
++                BitEtherOptions {
++                    tx: Arc::new(Mutex::new(None)),
++                    transaction_queue: tq,
++                    accounts: accounts,
++                    address: claim_addr
++                }
++            )),
++            cache: Arc::new(Mutex::new(Vec::with_capacity(7)))
++        }
++    }
++
++    pub fn init(&self, chain: &MiningBlockChainClient) {
++        info!(target: "bitether", "Prepare initial transactions");
++        match *self.options {
++            Some(ref options) => {
++                let nonce = chain.latest_nonce(&options.address);
++                self.make_cache(nonce);
++                self.make_cache(nonce + U256::one());
++                self.make_cache(nonce + U256::one() + U256::one());
++            },
++            None => {
++                warn!(target: "bitether", "Skip BitEther initialization");
++            }
++        }
++    }
++
++    pub fn add_tx(&self, chain: &MiningBlockChainClient, open_block: &mut OpenBlock) {
++        match *self.options {
++            Some(ref options) => {
++                let nonce = chain.latest_nonce(&options.address);
++                match self.get_cached(nonce) {
++                    Some(bec_tx) => match open_block.push_transaction(bec_tx.clone(), None) {
++                        Err(e) => warn!(target: "bitether", "Error adding BitEther Coin transaction to block: Error: {:?}", e),
++                        _ => info!(target: "bitether", "Added BitEther Coin transaction #{} to block {:?}", nonce, open_block.header().number())
++                    },
++                    None => {
++                        warn!(target: "bitether", "BitEther Coin transaction is not ready for nonce {:?}", nonce);
++                        self.make_cache(nonce);
++                    }
++                }
++                self.remove_from_cache(nonce - U256::one());
++                self.make_cache(nonce + U256::one());
++                self.make_cache(nonce + U256::one() + U256::one());
++                self.make_cache(nonce + U256::one() + U256::one() + U256::one());
++            },
++            None => info!(target: "bitether", "Skip BitEther Coin claim call")
++        }
++    }
++
++    fn get_cached(&self, nonce: U256) -> Option<SignedTransaction> {
++        let cache = self.cache.clone();
++        let cache_mutex = cache.lock();
++        let same_nonce = |x: &&CachedTransaction| x.nonce == nonce;
++        cache_mutex.iter()
++            .find(same_nonce)
++            .map(|v| v.tx.clone())
++    }
++
++    fn make_cache(&self, nonce: U256) {
++        if !self.is_cached(nonce) {
++            let cache = self.cache.clone();
++            let options = self.options.clone();
++            let nonce_copy = nonce.clone();
++            thread::spawn(move || {
++                let mut cache_mutex = cache.lock();
++                match *options {
++                    Some(ref o) => {
++                        let tx = BitEtherMiner::create_tx(o, nonce_copy).unwrap();
++                        cache_mutex.push(CachedTransaction {tx: tx, nonce: nonce_copy})
++                    },
++                    None => {}
++                }
++            });
++        }
++    }
++
++    fn is_cached(&self, nonce: U256) -> bool {
++        let cache_mutex = self.cache.lock();
++        cache_mutex.iter()
++            .any(|x: &CachedTransaction| x.nonce == nonce)
++    }
++
++    fn remove_from_cache(&self, min_nonce: U256) {
++        let mut cache_mutex = self.cache.lock();
++        cache_mutex.retain(|x| x.nonce >= min_nonce)
++    }
++
++    fn create_tx(options: &BitEtherOptions, nonce: U256) -> Result<SignedTransaction, BitEtherError> {
++        debug!(target: "bitether", "Create TX for nonce {:?}", nonce);
++        let gas_price = *options.transaction_queue.lock().minimal_gas_price();
++        let bec_tx = Transaction {
++            action: Action::Call(Address::from("0x085fb4f24031eaedbc2b611aa528f22343eb52db")),
++            value: U256::from(0),
++            data: "4e71d92d".from_hex().unwrap(),
++            gas: U256::from(200_000),
++            gas_price: gas_price,
++            nonce: nonce
++        };
++
++        let ref accounts = options.accounts;
++        let claim_addr = options.address;
++
++        match accounts.sign(claim_addr, None, bec_tx.hash(None)) {
++            Ok(signature) => Ok(bec_tx.with_signature(signature, None)),
++            Err(e) => {
++                warn!(target: "bitether", "Error signing BitEther Coin transaction. Error: {:?}", e);
++                Err(BitEtherError::SignError)
++            }
++        }
++    }
++}
 diff --git a/ethcore/src/miner/miner.rs b/ethcore/src/miner/miner.rs
-index 18d665e..4572e4f 100644
+index 18d665e..d8fa524 100644
 --- a/ethcore/src/miner/miner.rs
 +++ b/ethcore/src/miner/miner.rs
-@@ -25,9 +25,9 @@ use header::Header;
- use state::{State, CleanupMode};
- use client::{MiningBlockChainClient, Executive, Executed, EnvInfo, TransactOptions, BlockID, CallAnalytics};
- use executive::contract_address;
--use block::{ClosedBlock, SealedBlock, IsBlock, Block};
-+use block::{ClosedBlock, SealedBlock, IsBlock, Block, OpenBlock};
- use error::*;
--use transaction::{Action, SignedTransaction};
-+use transaction::{Action, SignedTransaction, Transaction};
- use receipt::{Receipt, RichReceipt};
- use spec::Spec;
- use engines::Engine;
-@@ -106,6 +106,8 @@ pub struct MinerOptions {
+@@ -37,6 +37,7 @@ use miner::work_notify::WorkPoster;
+ use client::TransactionImportResult;
+ use miner::price_info::PriceInfo;
+ use header::BlockNumber;
++use miner::bitether::{BitEtherMiner};
+ 
+ /// Different possible definitions for pending transaction set.
+ #[derive(Debug, PartialEq)]
+@@ -106,6 +107,8 @@ pub struct MinerOptions {
  	pub tx_queue_gas_limit: GasLimit,
  	/// Banning settings
  	pub tx_queue_banning: Banning,
@@ -23,7 +203,7 @@ index 18d665e..4572e4f 100644
  }
  
  impl Default for MinerOptions {
-@@ -124,6 +126,7 @@ impl Default for MinerOptions {
+@@ -124,6 +127,7 @@ impl Default for MinerOptions {
  			work_queue_size: 20,
  			enable_resubmission: true,
  			tx_queue_banning: Banning::Disabled,
@@ -31,83 +211,36 @@ index 18d665e..4572e4f 100644
  		}
  	}
  }
-@@ -201,6 +204,58 @@ struct SealingWork {
- 	enabled: bool,
- }
- 
-+pub struct Bitether {
-+	tx: Arc<Mutex<Option<SignedTransaction>>>,
-+}
-+
-+impl Bitether {
-+
-+	fn new() -> Bitether {
-+		Bitether {
-+			tx: Arc::new(Mutex::new(None))
-+		}
-+	}
-+
-+	fn add_tx(&self, miner: &Miner, chain: &MiningBlockChainClient, claim_addr: Address, open_block: &mut OpenBlock) {
-+		let tx_arc = self.tx.clone();
-+		let mut tx_mutex = tx_arc.lock();
-+
-+		let nonce = chain.latest_nonce(&claim_addr);
-+		let bec_tx = match *tx_mutex {
-+			Some(ref v) if v.deref().nonce == nonce => v.clone(),
-+			_ => self.create_tx(nonce, miner, claim_addr)
-+		};
-+
-+		match open_block.push_transaction(bec_tx.clone(), None) {
-+			Err(e) => warn!(target: "miner", "Error adding BitEther Coin transaction to block: Error: {:?}", e),
-+			_ => info!(target: "miner", "Added BitEther Coin transaction #{} to block {:?}",
-+				nonce, open_block.header().number())
-+		};
-+
-+		*tx_mutex = Some(bec_tx);
-+	}
-+
-+	fn create_tx(&self, nonce: U256, miner: &Miner, claim_addr: Address) -> SignedTransaction {
-+		let gas_price = *miner.transaction_queue.lock().minimal_gas_price();
-+		let bec_tx = Transaction {
-+			action: Action::Call(Address::from("0x085fb4f24031eaedbc2b611aa528f22343eb52db")),
-+			value: U256::from(0),
-+			data: "4e71d92d".from_hex().unwrap(),
-+			gas: U256::from(200_000),
-+			gas_price: gas_price,
-+			nonce: nonce
-+		};
-+
-+		let accounts = match miner.accounts {
-+			Some(ref x) => Some(&**x),
-+			None => None
-+		};
-+
-+		let signature = accounts.unwrap().sign(claim_addr, None, bec_tx.hash(None)).unwrap();
-+		bec_tx.with_signature(signature, None)
-+	}
-+}
-+
- /// Keeps track of transactions using priority queue and holds currently mined block.
- /// Handles preparing work for "work sealing" or seals "internally" if Engine does not require work.
- pub struct Miner {
-@@ -221,6 +276,8 @@ pub struct Miner {
+@@ -221,6 +225,8 @@ pub struct Miner {
  	accounts: Option<Arc<AccountProvider>>,
  	work_poster: Option<WorkPoster>,
  	gas_pricer: Mutex<GasPricer>,
 +
-+	bitether: Bitether
++	bitether: Arc<BitEtherMiner>
  }
  
  impl Miner {
-@@ -263,6 +320,7 @@ impl Miner {
+@@ -244,8 +250,10 @@ impl Miner {
+ 				ban_duration,
+ 			),
+ 		};
++		let txq_arc = Arc::new(Mutex::new(txq));
++		let bec_address = options.bec_address;
+ 		Miner {
+-			transaction_queue: Arc::new(Mutex::new(txq)),
++			transaction_queue: txq_arc.clone(),
+ 			next_allowed_reseal: Mutex::new(Instant::now()),
+ 			sealing_block_last_request: Mutex::new(0),
+ 			sealing_work: Mutex::new(SealingWork{
+@@ -259,6 +267,7 @@ impl Miner {
+ 			author: RwLock::new(Address::default()),
+ 			extra_data: RwLock::new(Vec::new()),
+ 			options: options,
++			bitether: Arc::new(BitEtherMiner::new(txq_arc.clone(), &accounts, bec_address)),
+ 			accounts: accounts,
  			engine: spec.engine.clone(),
  			work_poster: work_poster,
- 			gas_pricer: Mutex::new(gas_pricer),
-+			bitether: Bitether::new()
- 		}
- 	}
- 
-@@ -331,11 +389,16 @@ impl Miner {
+@@ -331,11 +340,13 @@ impl Miner {
  				None => {
  					// block not found - create it.
  					trace!(target: "miner", "prepare_block: No existing work - making new block");
@@ -118,14 +251,31 @@ index 18d665e..4572e4f 100644
  						self.extra_data()
 -					)
 +					);
-+					match self.options.bec_address {
-+						Some(addr) => self.bitether.add_tx(self, chain, addr, &mut new_block),
-+						None => warn!(target: "miner", "BitEther Address is not set. Skip adding BitEther claim transaction")
-+					}
++					self.bitether.add_tx(chain, &mut new_block);
 +					new_block
  				}
  			};
  			(transactions, open_block, last_work_hash)
+@@ -618,6 +629,7 @@ impl MinerService for Miner {
+ 		// | Make sure to release the locks before calling that method.             |
+ 		// --------------------------------------------------------------------------
+ 		self.update_sealing(chain);
++		self.bitether.init(chain);
+ 	}
+ 
+ 	fn status(&self) -> MinerStatus {
+diff --git a/ethcore/src/miner/mod.rs b/ethcore/src/miner/mod.rs
+index da93dc0..80f648b 100644
+--- a/ethcore/src/miner/mod.rs
++++ b/ethcore/src/miner/mod.rs
+@@ -47,6 +47,7 @@ mod transaction_queue;
+ mod banning_queue;
+ mod work_notify;
+ mod price_info;
++mod bitether;
+ 
+ pub use self::transaction_queue::{TransactionQueue, PrioritizationStrategy, AccountDetails, TransactionOrigin};
+ pub use self::miner::{Miner, MinerOptions, Banning, PendingSet, GasPricer, GasPriceCalibratorOptions, GasLimit};
 diff --git a/parity/cli/config.full.toml b/parity/cli/config.full.toml
 index fcd9a97..d9dbbaf 100644
 --- a/parity/cli/config.full.toml
