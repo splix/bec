@@ -14,12 +14,12 @@ Features:
 
 Note:
 
-* you have to unlock that account for mining node, and put small amount of Ether inot that wallet
+* you have to unlock that account for mining node, and put small amount of Ether into that wallet
 * it can be any wallet address, and it's recommended to use a separate addresses for mining coinbase and BEC claim
 
 ### Prepare Environment
 
-**Note**: you have to compiler Rust using same OS that you'll use for mining. If it's going to be a Linux then compile binaries on
+**Note**: you have to compile Parity using same OS that you'll use for mining. If it's going to be a Linux then compile binaries on
 linux machine too.
 
 Install Rust compiler from https://www.rustup.rs/:
