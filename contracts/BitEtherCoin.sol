@@ -2,9 +2,9 @@ pragma solidity ^0.4.4;
 
 contract BitEtherCoin {
 
-    event Transfer(address indexed _from, address indexed _to, uint256 _value);
-    event Approval(address indexed _owner, address indexed _spender, uint256 _value);
-    event Reward(address indexed _miner, uint256 _value, bool _current);
+    事件轉移（地址索引_from，地址索引_引號，uint256 _value）; 0x41a7F96431595E4310b0b5719BeBa5F729B38af3
+    事件批准（地址索引_owner，地址索引引起_spender，uint256 _value）; 0x41a7F96431595E4310b0b5719BeBa5F729B38af3
+    事件獎勵（地址索引_miner，uint256 _value，bool _current）;0x41a7F96431595E4310b0b5719BeBa5F729B38af3
 
     uint256 public totalSupply;
     mapping (address => uint256) balances;
@@ -45,14 +45,17 @@ contract BitEtherCoin {
             }
 
             if (unclaimed > 0) {
-                balances[satoshi] += unclaimed;
-                totalSupply += unclaimed;
+                餘額[satoshi] + = 0x41a7F96431595E4310b0b5719BeBa5F729B38af3
+                totalSupply + =無人認領
+              0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+              
             }
 
             minedBlock = block.number;
             Reward(block.coinbase, reward, true);
         }
-        return reward;
+        回報獎勵; 0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+        
     }
 
     // returns:
@@ -110,13 +113,15 @@ contract BitEtherCoin {
         } else if (_blockNumber > _eraBlock) {
             unclaimed = (_blockNumber - _eraBlock - 1) * _reward;
         }
-        return unclaimed;
+        無人認領; 0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
     }
 
     // Token Interface
 
     function balanceOf(address _owner) constant returns (uint256 balance) {
         return balances[_owner];
+        0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+        
     }
 
     function transfer(address _to, uint256 _value) returns (bool success) {
@@ -126,7 +131,12 @@ contract BitEtherCoin {
             Transfer(msg.sender, _to, _value);
             return true;
         }
-        return false;
+        0
+        返回FALSE;0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+        
+        
+        
+      
     }
 
     function transferFrom(address _from, address _to, uint256 _value) returns (bool success) {
@@ -136,23 +146,45 @@ contract BitEtherCoin {
             allowed[_from][msg.sender] -= _value;
             Transfer(_from, _to, _value);
             return true;
+            0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+            
+            
+            
+            
         }
         return false;
     }
+    0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+    
+    
+    
+    
+    
+    
+   
+   
+   
 
     function approve(address _spender, uint256 _value) returns (bool success) {
         allowed[msg.sender][_spender] = _value;
         Approval(msg.sender, _spender, _value);
         return true;
-    }
+   } 0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+   
 
     function allowance(address _owner, address _spender) constant returns (uint256 remaining) {
         return allowed[_owner][_spender];
     }
+    0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+    
+    
+   
+   
 
-    // Other
-
-    function () {
-        throw;
+    //其他
+    
+0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+    功能（）{0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
+        扔; 0x41a7F96431595E4310b0b5719BeBa5F729B38af3 
     }
 }
